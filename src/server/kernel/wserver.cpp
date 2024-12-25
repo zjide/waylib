@@ -25,7 +25,7 @@
 #include <QAbstractEventDispatcher>
 #include <QSocketNotifier>
 #include <QMutex>
-#include <QDebug>
+#include <QLoggingCategory>
 #include <QProcess>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -37,6 +37,8 @@
 
 QW_USE_NAMESPACE
 WAYLIB_SERVER_BEGIN_NAMESPACE
+
+Q_LOGGING_CATEGORY(qLcWlrServer, "waylib.server.core")
 
 static bool globalFilter(const wl_client *client,
                          const wl_global *global,
@@ -102,20 +104,20 @@ void WServerPrivate::init()
     }
 
     loop = wl_display_get_event_loop(display->handle());
-    int fd = wl_event_loop_get_fd(loop);
-
-    auto processWaylandEvents = [this] {
-        int ret = wl_event_loop_dispatch(loop, 0);
-        if (ret)
-            fprintf(stderr, "wl_event_loop_dispatch error: %d\n", ret);
-        wl_display_flush_clients(display->handle());
-    };
+    const int fd = wl_event_loop_get_fd(loop);
+    if (fd == -1) {
+        qCFatal(qLcWlrServer) << "Did not get the file descriptor for the event loop";
+    }
 
     sockNot.reset(new QSocketNotifier(fd, QSocketNotifier::Read));
-    QObject::connect(sockNot.get(), &QSocketNotifier::activated, q, processWaylandEvents);
+    QObject::connect(sockNot.get(), &QSocketNotifier::activated, q, [this] {
+        dispatchEvents();
+    });
 
-    QAbstractEventDispatcher *dispatcher = QThread::currentThread()->eventDispatcher();
-    QObject::connect(dispatcher, &QAbstractEventDispatcher::aboutToBlock, q, processWaylandEvents);
+    QAbstractEventDispatcher *dispatcher = QCoreApplication::eventDispatcher();
+    QObject::connect(dispatcher, &QAbstractEventDispatcher::aboutToBlock, q, [this] {
+        flush();
+    });
 
     for (auto socket : std::as_const(sockets))
         initSocket(socket);
@@ -140,6 +142,18 @@ void WServerPrivate::stop()
 
     sockNot.reset();
     QThread::currentThread()->eventDispatcher()->disconnect(q);
+}
+
+void WServerPrivate::dispatchEvents()
+{
+    int ret = wl_event_loop_dispatch(loop, 0);
+    if (ret)
+        qCCritical(qLcWlrServer, "wl_event_loop_dispatch error: %d\n", ret);
+}
+
+void WServerPrivate::flush()
+{
+    wl_display_flush_clients(display->handle());
 }
 
 void WServerPrivate::initSocket(WSocket *socketServer)

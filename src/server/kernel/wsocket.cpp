@@ -19,8 +19,6 @@
 #include <sys/un.h>
 #include <signal.h>
 
-struct wl_event_source;
-
 WAYLIB_SERVER_BEGIN_NAMESPACE
 
 #define LOCK_SUFFIX ".lock"
@@ -656,8 +654,8 @@ WClient *WSocket::addClient(wl_client *client)
 {
     W_D(WSocket);
 
-    WClient *wclient = nullptr;
-    if ((wclient = WClient::get(client))) {
+    WClient *wclient = WClient::get(client);
+    if (wclient) {
         if (wclient->socket() != this)
             return nullptr;
         if (d->clients.contains(wclient))

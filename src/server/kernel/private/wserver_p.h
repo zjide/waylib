@@ -22,10 +22,13 @@ class Q_DECL_HIDDEN WServerPrivate : public WObjectPrivate
 {
 public:
     WServerPrivate(WServer *qq);
-    ~WServerPrivate();
+    ~WServerPrivate() override;
 
     void init();
     void stop();
+
+    void dispatchEvents();
+    void flush();
 
     void initSocket(WSocket *socketServer);
 
