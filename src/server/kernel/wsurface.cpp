@@ -116,20 +116,11 @@ void WSurfacePrivate::updateOutputs()
 
 void WSurfacePrivate::setBuffer(qw_buffer *newBuffer)
 {
-    if (buffer) {
-        if (auto clientBuffer = qw_client_buffer::get(*buffer)) {
-            Q_ASSERT(clientBuffer->handle()->n_ignore_locks > 0);
-            clientBuffer->handle()->n_ignore_locks--;
-        }
-    }
-
     if (newBuffer) {
-        if (auto clientBuffer = qw_client_buffer::get(*newBuffer)) {
-            clientBuffer->handle()->n_ignore_locks++;
-        }
-
-        newBuffer->lock();
-        buffer.reset(newBuffer);
+        auto clientBuffer = qw_client_buffer::get(*newBuffer);
+        auto sourceBuffer = clientBuffer ? qw_buffer::from(clientBuffer->handle()->source) : newBuffer;
+        sourceBuffer->lock();
+        buffer.reset(sourceBuffer);
     } else {
         buffer.reset(nullptr);
     }

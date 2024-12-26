@@ -195,6 +195,11 @@ public:
 
         Q_ASSERT(!updateTextureConnection);
         updateTextureConnection = surface->safeConnect(&WSurface::bufferChanged, q, [q, this] {
+            // WSurfaceItemContent is for displaying content. When buffer is null, the surface is unmapped.
+            // There is no need for WSurfaceItemContent to reset its buffer to null. It should keep the last
+            // non-null buffer until explicitly destroyed. So we directly return when surface's buffer is null.
+            if (!surface->buffer() && dontCacheLastBuffer)
+                return;
             if (!live) {
                 pendingBuffer.reset(surface->buffer());
                 if (pendingBuffer)
