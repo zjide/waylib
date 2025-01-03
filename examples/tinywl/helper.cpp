@@ -405,7 +405,7 @@ void Helper::init()
         qw_output_state newState;
         newState.set_gamma_lut(ramp_size, r, g, b);
 
-        if (!qwOutput->commit_state(newState)) {
+        if (!getOutput(WOutput::fromHandle(qwOutput))->commitState(newState.handle())) {
             qw_gamma_control_v1::from(gamma_control)->send_failed_and_destroy();
         }
     });
@@ -441,9 +441,9 @@ void Helper::init()
             }
 
             if (onlyTest)
-                ok &= output->handle()->test_state(newState);
+                ok &= getOutput(output)->testState(newState.handle());
             else
-                ok &= output->handle()->commit_state(newState);
+                ok &= getOutput(output)->commitState(newState.handle());
         }
         wOutputManager->sendResult(config, ok);
     });
@@ -666,10 +666,9 @@ void Helper::setCursorPosition(const QPointF &position)
 void Helper::allowNonDrmOutputAutoChangeMode(WOutput *output)
 {
     output->safeConnect(&qw_output::notify_request_state,
-        this, [this] (wlr_output_event_request_state *newState) {
+        this, [this, output] (wlr_output_event_request_state *newState) {
         if (newState->state->committed & WLR_OUTPUT_STATE_MODE) {
-            auto output = qobject_cast<qw_output*>(sender());
-            output->commit_state(newState->state);
+            getOutput(output)->commitState(newState->state);
         }
     });
 }
@@ -693,7 +692,7 @@ void Helper::enableOutput(WOutput *output)
                 newState.set_mode(mode);
         }
         newState.set_enabled(true);
-        bool ok = qwoutput->commit_state(newState);
+        bool ok = getOutput(output)->commitState(newState);
         Q_ASSERT(ok);
     }
 }

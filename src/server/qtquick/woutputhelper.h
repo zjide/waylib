@@ -53,8 +53,6 @@ public:
     void setBuffer(QW_NAMESPACE::qw_buffer *buffer);
     QW_NAMESPACE::qw_buffer *buffer() const;
 
-    void setScale(float scale);
-    void setTransform(WOutput::Transform t);
     void setDamage(const pixman_region32 *damage);
     const pixman_region32 *damage() const;
     void setLayers(const wlr_output_layer_state_array &layers);
@@ -68,13 +66,13 @@ public:
 
     void resetState(bool resetRenderable);
     void update();
+    void requestFrame();
 
 protected:
     WOutputHelper(WOutput *output, bool renderable, bool contentIsDirty, bool needsFrame, QObject *parent = nullptr);
 
 Q_SIGNALS:
     void requestRender();
-    void damaged();
     void renderableChanged();
     void contentIsDirtyChanged();
     void needsFrameChanged();

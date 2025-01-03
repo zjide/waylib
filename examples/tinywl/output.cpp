@@ -449,6 +449,22 @@ void Output::updatePositionFromLayout()
     m_item->setPosition(pos);
 }
 
+bool Output::commitState(const wlr_output_state *state)
+{
+    auto viewport = screenViewport();
+    if (!viewport)
+        return false;
+    return viewport->commitState(state);
+}
+
+bool Output::testState(const wlr_output_state *state)
+{
+    auto viewport = screenViewport();
+    if (!viewport)
+        return false;
+    return viewport->testState(state);
+}
+
 std::pair<WOutputViewport*, QQuickItem*> Output::getOutputItemProperty()
 {
     WOutputViewport *viewportCopy = outputItem()->findChild<WOutputViewport*>({}, Qt::FindDirectChildrenOnly);

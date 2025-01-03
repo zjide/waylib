@@ -177,7 +177,6 @@ public:
 
     inline void init() {
         connect(this, &OutputHelper::requestRender, renderWindow(), qOverload<>(&WOutputRenderWindow::render));
-        connect(this, &OutputHelper::damaged, renderWindow(), &WOutputRenderWindow::scheduleRender);
         // TODO: pre update scale after WOutputHelper::setScale
         output()->output()->safeConnect(&WOutput::scaleChanged, this, &OutputHelper::updateSceneDPR);
     }
@@ -241,12 +240,13 @@ public:
     WBufferRenderer *afterRender();
     WBufferRenderer *compositeLayers(const QVector<LayerData*> layers, bool forceShadowRenderer);
     bool commit(WBufferRenderer *buffer);
+    qw_buffer* lastBuffer() const;
     bool tryToHardwareCursor(const LayerData *layer);
 
 private:
     WOutputViewport *m_output = nullptr;
     QList<LayerData*> m_layers;
-    WBufferRenderer *m_lastCommitBuffer = nullptr;
+    QPointer<WBufferRenderer> m_lastCommitBuffer;
     // only for render cursor
     QPointer<WBufferRenderer> m_cursorRenderer;
     BufferRendererProxy *m_cursorLayerProxy = nullptr;
@@ -1069,6 +1069,13 @@ bool OutputHelper::commit(WBufferRenderer *buffer)
     return WOutputHelper::commit();
 }
 
+qw_buffer *OutputHelper::lastBuffer() const
+{
+    if (Q_UNLIKELY(!m_lastCommitBuffer))
+        return nullptr;
+    return m_lastCommitBuffer->lastBuffer();
+}
+
 bool OutputHelper::tryToHardwareCursor(const LayerData *layer)
 {
     do {
@@ -1648,10 +1655,10 @@ void WOutputRenderWindow::attach(WOutputLayer *layer, WOutputViewport *output)
 
     auto outputHelper = d->getOutputHelper(output);
     if (outputHelper && outputHelper->attachLayer(wapper))
-        d->scheduleDoRender();
+        outputHelper->requestFrame();
 
-    connect(layer, &WOutputLayer::flagsChanged, this, &WOutputRenderWindow::scheduleRender);
-    connect(layer, &WOutputLayer::zChanged, this, &WOutputRenderWindow::scheduleRender);
+    connect(layer, &WOutputLayer::flagsChanged, outputHelper, &OutputHelper::requestFrame);
+    connect(layer, &WOutputLayer::zChanged, outputHelper, &OutputHelper::requestFrame);
 
     if (auto od = WOutputViewportPrivate::get(output)) {
         od->notifyLayersChanged();
@@ -1741,24 +1748,59 @@ QList<WOutputLayer *> WOutputRenderWindow::hardwareLayers(const WOutputViewport 
     return list;
 }
 
-void WOutputRenderWindow::setOutputScale(WOutputViewport *output, float scale)
+bool WOutputRenderWindow::commitOutputState(WOutputViewport *output, const wlr_output_state *state)
 {
     Q_D(WOutputRenderWindow);
 
-    if (auto helper = d->getOutputHelper(output)) {
-        helper->setScale(scale);
-        update();
+    auto helper = d->getOutputHelper(output);
+    auto buffer = helper->lastBuffer();
+
+    if ((state->committed & WLR_OUTPUT_STATE_BUFFER)
+        || !buffer) {
+        return helper->qwoutput()->commit_state(state);
     }
+
+    wlr_output_state new_state;
+    // Don't use the wlr_output_state_copy, we need only a shallow copy
+    new_state = *state;
+    wlr_output_state_set_buffer(&new_state, *buffer);
+
+    bool ok = helper->qwoutput()->commit_state(&new_state);
+    // lock in wlr_output_state_set_buffer
+    buffer->unlock();
+
+    if ((state->committed
+         & (WLR_OUTPUT_STATE_MODE
+            | WLR_OUTPUT_STATE_SCALE
+            | WLR_OUTPUT_STATE_TRANSFORM)) != 0) {
+        helper->update();
+    }
+
+    return ok;
 }
 
-void WOutputRenderWindow::rotateOutput(WOutputViewport *output, WOutput::Transform t)
+bool WOutputRenderWindow::testOutputState(WOutputViewport *output, const wlr_output_state *state)
 {
     Q_D(WOutputRenderWindow);
 
-    if (auto helper = d->getOutputHelper(output)) {
-        helper->setTransform(t);
-        update();
+    auto helper = d->getOutputHelper(output);
+    auto buffer = helper->lastBuffer();
+
+    if ((state->committed & WLR_OUTPUT_STATE_BUFFER)
+        || !buffer) {
+        return helper->qwoutput()->test_state(state);
     }
+
+    wlr_output_state new_state;
+    // Don't use the wlr_output_state_copy, we need only a shallow copy
+    new_state = *state;
+    wlr_output_state_set_buffer(&new_state, *buffer);
+
+    bool ok = helper->qwoutput()->test_state(&new_state);
+    // lock in wlr_output_state_set_buffer
+    buffer->unlock();
+
+    return ok;
 }
 
 void WOutputRenderWindow::init(qw_renderer *renderer, qw_allocator *allocator)
@@ -1878,7 +1920,6 @@ void WOutputRenderWindow::update(WOutputViewport *output)
     int index = d->indexOfOutputHelper(output);
     Q_ASSERT(index >= 0);
     d->outputs.at(index)->update();
-    d->scheduleDoRender();
 }
 
 qreal WOutputRenderWindow::width() const

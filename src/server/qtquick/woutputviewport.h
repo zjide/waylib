@@ -103,6 +103,9 @@ public:
     QList<WOutputViewport *> depends() const;
     void setDepends(const QList<WOutputViewport *> &newDepends);
 
+    bool commitState(const wlr_output_state *state);
+    bool testState(const wlr_output_state *state);
+
 public Q_SLOTS:
     void setOutputScale(float scale);
     void rotateOutput(WOutput::Transform t);

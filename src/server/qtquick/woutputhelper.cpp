@@ -47,10 +47,7 @@ public:
         output->safeConnect(&qw_output::notify_frame, qq, [this] {
             on_frame();
         });
-        output->safeConnect(&qw_output::notify_needs_frame, qq, [this] {
-            setNeedsFrame(true);
-            qwoutput()->qw_output::schedule_frame();
-        });
+        output->safeConnect(&qw_output::notify_needs_frame, qq, &WOutputHelper::requestFrame);
         output->safeConnect(&qw_output::notify_damage, qq, [this] {
             on_damage();
         });
@@ -134,8 +131,10 @@ void WOutputHelperPrivate::on_frame()
 
 void WOutputHelperPrivate::on_damage()
 {
-    setContentIsDirty(true);
-    Q_EMIT q_func()->damaged();
+    // The damage envent is from wlr_cursor.
+
+    // The cursor's implementation is in WOutputLayer,
+    // is not in wlroots, so don't do anything here.
 }
 
 qw_buffer *WOutputHelperPrivate::acquireBuffer(wlr_swapchain **sc, int *bufferAge)
@@ -214,18 +213,6 @@ qw_buffer *WOutputHelper::buffer() const
     return d->state.buffer ? qw_buffer::from(d->state.buffer) : nullptr;
 }
 
-void WOutputHelper::setScale(float scale)
-{
-    W_D(WOutputHelper);
-    wlr_output_state_set_scale(&d->state, scale);
-}
-
-void WOutputHelper::setTransform(WOutput::Transform t)
-{
-    W_D(WOutputHelper);
-    wlr_output_state_set_transform(&d->state, static_cast<wl_output_transform>(t));
-}
-
 void WOutputHelper::setDamage(const pixman_region32 *damage)
 {
     W_D(WOutputHelper);
@@ -256,6 +243,14 @@ bool WOutputHelper::commit()
 {
     W_D(WOutputHelper);
     wlr_output_state state = d->state;
+    if (state.committed == 0)
+        return false;
+
+    if (state.committed != WLR_OUTPUT_STATE_LAYERS) {
+        Q_ASSERT_X(state.committed & WLR_OUTPUT_STATE_BUFFER, Q_FUNC_INFO,
+                   "WOutputHelper::commit: buffer is not set, you will got a black frame");
+    }
+
     wlr_output_state_init(&d->state);
     bool ok = d->qwoutput()->commit_state(&state);
     wlr_output_state_finish(&state);
@@ -333,6 +328,13 @@ void WOutputHelper::update()
 {
     W_D(WOutputHelper);
     d->update();
+}
+
+void WOutputHelper::requestFrame()
+{
+    W_D(WOutputHelper);
+    d->setNeedsFrame(true);
+    d->qwoutput()->schedule_frame();
 }
 
 WAYLIB_SERVER_END_NAMESPACE

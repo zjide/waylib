@@ -493,18 +493,44 @@ void WOutputViewport::setDepends(const QList<WOutputViewport *> &newDepends)
     Q_EMIT dependsChanged();
 }
 
+bool WOutputViewport::commitState(const wlr_output_state *state)
+{
+    W_D(WOutputViewport);
+    if (auto window = d->outputWindow()) {
+        return window->commitOutputState(this, state);
+    }
+
+    return false;
+}
+
+bool WOutputViewport::testState(const wlr_output_state *state)
+{
+    W_D(WOutputViewport);
+    if (auto window = d->outputWindow()) {
+        return window->testOutputState(this, state);
+    }
+
+    return false;
+}
+
 void WOutputViewport::setOutputScale(float scale)
 {
     W_D(WOutputViewport);
-    if (auto window = d->outputWindow())
-        window->setOutputScale(this, scale);
+    if (auto window = d->outputWindow()) {
+        qw_output_state state;
+        state.set_scale(scale);
+        window->commitOutputState(this, state.handle());
+    }
 }
 
 void WOutputViewport::rotateOutput(WOutput::Transform t)
 {
     W_D(WOutputViewport);
-    if (auto window = d->outputWindow())
-        window->rotateOutput(this, t);
+    if (auto window = d->outputWindow()) {
+        qw_output_state state;
+        state.set_transform(static_cast<wl_output_transform>(t));
+        window->commitOutputState(this, state.handle());
+    }
 }
 
 void WOutputViewport::render(bool doCommit)

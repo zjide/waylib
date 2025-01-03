@@ -42,9 +42,8 @@ public:
                 WOutputViewport *mapFrom, QQuickItem *mapTo);
     void detach(WOutputLayer *layer, WOutputViewport *output);
 
-    void setOutputScale(WOutputViewport *output, float scale);
-    void rotateOutput(WOutputViewport *output, WOutput::Transform t);
-    void setOutputEnabled(WOutputViewport *output, bool enabled);
+    bool commitOutputState(WOutputViewport *output, const wlr_output_state *state);
+    bool testOutputState(WOutputViewport *output, const wlr_output_state *state);
 
     void init(QW_NAMESPACE::qw_renderer *renderer, QW_NAMESPACE::qw_allocator *allocator);
     QW_NAMESPACE::qw_renderer *renderer() const;

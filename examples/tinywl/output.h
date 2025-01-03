@@ -65,6 +65,9 @@ public:
     WOutputViewport *screenViewport() const;
     void updatePositionFromLayout();
 
+    bool commitState(const wlr_output_state *state);
+    bool testState(const wlr_output_state *state);
+
 signals:
     void exclusiveZoneChanged();
     void moveResizeFinised();
